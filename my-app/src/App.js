@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { fab } from '@fortawesome/free-brands-svg-icons';
@@ -13,6 +13,7 @@ import AllBlogPage from './pages/AllBlogPage';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import AppointmentFormPage from './pages/AppointmentFormPage';
+import { getVideos } from './services/videoService';
 
 // Font Awesome kütüphanesini başlat
 library.add(fab);
@@ -73,9 +74,20 @@ const blogPosts = [
   }
 ];
 
+// Yardımcı fonksiyon: YouTube video ID'sini çıkar
+function extractYouTubeId(url) {
+  const regExp = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([\w-]{11})/;
+  const match = url.match(regExp);
+  return (match && match[1]) ? match[1] : null;
+}
+
 function App() {
   const [currentBlogIndex, setCurrentBlogIndex] = useState(0);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const navigate = useNavigate();
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const handlePrevBlog = () => {
     setCurrentBlogIndex((prevIndex) => (prevIndex === 0 ? blogPosts.length - 1 : prevIndex - 1));
@@ -92,6 +104,41 @@ function App() {
       blogPosts[(currentBlogIndex + 2) % blogPosts.length]
     ];
   };
+
+  useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        const data = await getVideos();
+        // Sadece video_url'i dolu olanları al
+        setVideos(data.filter(v => v.video_url && v.video_url.trim() !== ""));
+        setLoading(false);
+      } catch (err) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    fetchVideos();
+  }, []);
+
+  const handlePrevVideo = () => {
+    setCurrentVideoIndex((prevIndex) => (prevIndex - 1 + videos.length) % videos.length);
+  };
+
+  const handleNextVideo = () => {
+    setCurrentVideoIndex((prevIndex) => (prevIndex + 1) % videos.length);
+  };
+
+  const getVisibleVideos = () => {
+    if (!videos || videos.length === 0) return [];
+    const visibleVideos = [];
+    for (let i = 0; i < 3; i++) {
+      visibleVideos.push(videos[(currentVideoIndex + i) % videos.length]);
+    }
+    return visibleVideos;
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="min-h-screen bg-white">
@@ -183,7 +230,92 @@ function App() {
             </section>
 
             {/* Videos Section */}
-            <Videos />
+            <section id="videos" className="py-20 bg-gradient-to-r from-[#F5F7FA] to-[#EFF5FB]">
+              <div className="container mx-auto px-8">
+                <div className="text-center mb-12">
+                  <div className="flex items-center justify-center space-x-4 mb-4">
+                    <div className="h-[3px] w-20 bg-[#394C8C]"></div>
+                    <h2 className="text-4xl font-bold text-[#1E2E62]">Videolar</h2>
+                    <div className="h-[3px] w-20 bg-[#394C8C]"></div>
+                  </div>
+                  <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                    Sağlık ve tedavi hakkında bilgilendirici videolar
+                  </p>
+                </div>
+
+                {loading ? (
+                  <div className="text-center">Yükleniyor...</div>
+                ) : error ? (
+                  <div className="text-center text-red-500">Hata: {error}</div>
+                ) : videos.length > 0 ? (
+                  <div className="relative">
+                    <button
+                      onClick={handlePrevVideo}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full flex items-center justify-center hover:bg-[#5A70B9] transition-all"
+                    >
+                      <FontAwesomeIcon icon={faChevronLeft} />
+                    </button>
+
+                    <div className="mx-16">
+                      <div className="grid grid-cols-3 gap-8">
+                        {getVisibleVideos().map((video, index) => (
+                          <div key={video.id} className={`bg-white rounded-xl overflow-hidden shadow-lg transform transition-all duration-300 ${index === 1 ? 'scale-105 z-10' : 'scale-90 opacity-70 z-0'}`}>
+                            <div className="relative pb-[56.25%]">
+                              {video.video_url && (video.video_url.includes('youtube.com') || video.video_url.includes('youtu.be')) ? (
+                                extractYouTubeId(video.video_url) ? (
+                                  <iframe
+                                    className="absolute top-0 left-0 w-full h-full"
+                                    src={`https://www.youtube.com/embed/${extractYouTubeId(video.video_url)}`}
+                                    title={video.title}
+                                    frameBorder="0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  ></iframe>
+                                ) : (
+                                  <div className="absolute top-0 left-0 w-full h-full bg-gray-200 flex items-center justify-center">
+                                    <span className="text-gray-500">Geçersiz YouTube linki</span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="absolute top-0 left-0 w-full h-full bg-gray-200 flex items-center justify-center">
+                                  <span className="text-gray-500">Sadece YouTube linkleri destekleniyor</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-6">
+                              <h3 className="text-xl font-bold text-[#1E2E62] mb-2">{video.title}</h3>
+                              <p className="text-gray-600">{video.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleNextVideo}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full flex items-center justify-center hover:bg-[#5A70B9] transition-all"
+                    >
+                      <FontAwesomeIcon icon={faChevronRight} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center">Henüz video eklenmemiş.</div>
+                )}
+
+                <div className="flex justify-center mt-12">
+                  <Link
+                    to="/videolar"
+                    className="group flex items-center space-x-3 bg-[#394C8C] text-white px-8 py-4 rounded-full font-semibold hover:bg-[#5A70B9] transition-all duration-300 shadow-lg hover:shadow-xl"
+                  >
+                    <span>Tüm Videolar</span>
+                    <FontAwesomeIcon
+                      icon={faArrowRight}
+                      className="transform transition-transform group-hover:translate-x-1"
+                    />
+                  </Link>
+                </div>
+              </div>
+            </section>
             
             {/* Blog Section */}
             <section id="blog" className="py-20 bg-gradient-to-r from-[#F5F7FA] to-[#EFF5FB]">
