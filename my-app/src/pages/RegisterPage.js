@@ -1,125 +1,150 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { registerUser } from '../services/authService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faLock, faHospitalUser } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelope, faLock } from '@fortawesome/free-solid-svg-icons';
 
-function RegisterPage() {
+const RegisterPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleRegister = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Burada kayıt işlemi yapılacak
-    console.log('Kayıt bilgileri:', { email, password });
-    // Başarılı kayıt sonrası yönlendirme
-    navigate('/');
+    setError('');
+
+    // Şifre kontrolü
+    if (password !== confirmPassword) {
+      setError('Şifreler eşleşmiyor');
+      return;
+    }
+
+    // Şifre uzunluk kontrolü
+    if (password.length < 6) {
+      setError('Şifre en az 6 karakter olmalıdır');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { user, error } = await registerUser(email, password);
+      
+      if (error) {
+        setError(error);
+        return;
+      }
+
+      if (user) {
+        // Başarılı kayıt sonrası giriş sayfasına yönlendir
+        navigate('/login');
+      }
+    } catch (err) {
+      setError('Kayıt olurken bir hata oluştu.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F5F7FA] to-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Sade arka plan */}
-      <div 
-        className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none" 
-        style={{
-          backgroundImage: 'radial-gradient(#394C8C 7%, transparent 7%)',
-          backgroundSize: '50px 50px'
-        }}
-      ></div>
-
-      <div className="relative z-10 max-w-lg w-full space-y-8 bg-white p-12 rounded-3xl shadow-2xl border border-[#394C8C]/10 transform transition-all duration-300 hover:scale-[1.01]">
+    <div className="min-h-screen bg-gradient-to-br from-[#EFF5FB] to-[#F5F7FA] flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-6">
         <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <FontAwesomeIcon 
-              icon={faHospitalUser} 
-              className="text-6xl text-[#394C8C] mb-4 opacity-80" 
-            />
-          </div>
-          <h2 className="text-4xl font-extrabold text-[#394C8C] mb-3">
-            Randevu Sistemine Katıl
-          </h2>
-          <p className="text-sm text-gray-600 max-w-md mx-auto">
-            Randevu almak için lütfen kayıt olun
+          <h1 className="text-3xl font-bold text-[#1E2E62]">Kayıt Ol</h1>
+          <p className="text-gray-600 mt-2">
+            Hesap oluşturarak randevu alabilirsiniz.
           </p>
         </div>
-        
-        <form className="space-y-6" onSubmit={handleRegister}>
-          <div className="space-y-4">
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email Adresi
+            </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <FontAwesomeIcon 
-                  icon={faUser} 
-                  className="text-[#394C8C] opacity-70" 
-                />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FontAwesomeIcon icon={faEnvelope} className="text-gray-400" />
               </div>
               <input
-                id="email"
-                name="email"
                 type="email"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-xl relative block w-full px-12 py-4 border border-gray-300 
-                           placeholder-gray-500 text-gray-900 focus:outline-none 
-                           focus:ring-2 focus:ring-[#394C8C] focus:border-[#394C8C] 
-                           transition duration-300 ease-in-out"
-                placeholder="E-posta adresinizi girin"
-              />
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <FontAwesomeIcon 
-                  icon={faLock} 
-                  className="text-[#394C8C] opacity-70" 
-                />
-              </div>
-              <input
-                id="password"
-                name="password"
-                type="password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-xl relative block w-full px-12 py-4 border border-gray-300 
-                           placeholder-gray-500 text-gray-900 focus:outline-none 
-                           focus:ring-2 focus:ring-[#394C8C] focus:border-[#394C8C] 
-                           transition duration-300 ease-in-out"
-                placeholder="Güçlü bir şifre belirleyin"
+                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#394C8C] focus:border-transparent"
+                placeholder="ornek@email.com"
               />
             </div>
           </div>
 
           <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-4 px-6 
-                         border border-transparent text-lg font-bold rounded-full 
-                         text-white bg-[#394C8C] hover:bg-[#5A70B9] 
-                         focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#394C8C]
-                         transform transition duration-300 hover:scale-[1.02] 
-                         hover:shadow-xl active:scale-95"
-            >
-              Hesap Oluştur
-            </button>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Şifre
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FontAwesomeIcon icon={faLock} className="text-gray-400" />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#394C8C] focus:border-transparent"
+                placeholder="••••••••"
+              />
+            </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Şifre Tekrar
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FontAwesomeIcon icon={faLock} className="text-gray-400" />
+              </div>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#394C8C] focus:border-transparent"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full bg-[#394C8C] text-white py-3 px-4 rounded-lg font-semibold 
+                       hover:bg-[#2D3E73] transition-colors duration-300 
+                       ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {loading ? 'Kayıt Yapılıyor...' : 'Kayıt Ol'}
+          </button>
         </form>
 
-        <div className="text-center mt-6">
-          <p className="text-sm text-gray-600">
-            Zaten bir hesabınız var mı?{' '}
-            <Link 
-              to="/login" 
-              className="font-semibold text-[#394C8C] hover:text-[#5A70B9] 
-                         transition duration-300 hover:underline"
-            >
-              Giriş Yapın
+        <div className="text-center">
+          <p className="text-gray-600">
+            Zaten hesabınız var mı?{' '}
+            <Link to="/login" className="text-[#394C8C] font-semibold hover:text-[#2D3E73]">
+              Giriş Yap
             </Link>
           </p>
         </div>
       </div>
     </div>
   );
-}
+};
 
 export default RegisterPage;

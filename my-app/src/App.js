@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { fab } from '@fortawesome/free-brands-svg-icons';
-import { faHeartPulse, faNotesMedical, faDisease, faStethoscope, faArrowRight, faCalendarAlt, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
+import { faHeartPulse, faNotesMedical, faDisease, faStethoscope, faArrowRight, faCalendarAlt, faChevronLeft, faChevronRight, faTimes } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import './index.css';
 import Videos from './Videos';
@@ -14,6 +14,8 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import AppointmentFormPage from './pages/AppointmentFormPage';
 import { getVideos } from './services/videoService';
+import { getBlogPosts, createBlogPost } from './services/blogService';
+import { extractYouTubeId } from './utils/videoUtils';
 
 // Font Awesome kütüphanesini başlat
 library.add(fab);
@@ -25,7 +27,8 @@ library.add(
   faArrowRight,
   faCalendarAlt,
   faChevronLeft,
-  faChevronRight
+  faChevronRight,
+  faTimes
 );
 
 // Özel kartlar için veri
@@ -52,72 +55,95 @@ const specialtyCards = [
   }
 ];
 
-// Blog yazıları için veri
-const blogPosts = [
-  {
-    id: 1,
-    title: 'Diyabet ve Beslenme Stratejileri',
-    excerpt: 'Sağlıklı yaşam için doğru beslenme alışkanlıkları ve diyabet yönetimi',
-    image: 'https://via.placeholder.com/400x250?text=Blog+1'
-  },
-  {
-    id: 2,
-    title: 'Tiroid Hastalıklarında Beslenme',
-    excerpt: 'Tiroid sağlığını destekleyen doğal yöntemler',
-    image: 'https://via.placeholder.com/400x250?text=Blog+2'
-  },
-  {
-    id: 3,
-    title: 'Metabolik Sağlık ve Egzersiz',
-    excerpt: 'Metabolik hastalıklardan korunma ve tedavi yöntemleri',
-    image: 'https://via.placeholder.com/400x250?text=Blog+3'
-  }
-];
-
-// Yardımcı fonksiyon: YouTube video ID'sini çıkar
-function extractYouTubeId(url) {
-  const regExp = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([\w-]{11})/;
-  const match = url.match(regExp);
-  return (match && match[1]) ? match[1] : null;
-}
-
 function App() {
   const [currentBlogIndex, setCurrentBlogIndex] = useState(0);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [selectedBlog, setSelectedBlog] = useState(null);
   const navigate = useNavigate();
   const [videos, setVideos] = useState([]);
+  const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const handlePrevBlog = () => {
-    setCurrentBlogIndex((prevIndex) => (prevIndex === 0 ? blogPosts.length - 1 : prevIndex - 1));
+    setCurrentBlogIndex((prevIndex) => (prevIndex === 0 ? blogs.length - 1 : prevIndex - 1));
   };
 
   const handleNextBlog = () => {
-    setCurrentBlogIndex((prevIndex) => (prevIndex === blogPosts.length - 1 ? 0 : prevIndex + 1));
+    setCurrentBlogIndex((prevIndex) => (prevIndex === blogs.length - 1 ? 0 : prevIndex + 1));
+  };
+
+  const openBlogModal = (blog) => {
+    setSelectedBlog(blog);
+  };
+
+  const closeBlogModal = () => {
+    setSelectedBlog(null);
   };
 
   const getVisibleBlogs = () => {
-    return [
-      blogPosts[currentBlogIndex],
-      blogPosts[(currentBlogIndex + 1) % blogPosts.length],
-      blogPosts[(currentBlogIndex + 2) % blogPosts.length]
+    console.log('Current blogs state:', blogs); // Debug log
+    if (!blogs || blogs.length === 0) {
+      console.log('No blogs available'); // Debug log
+      return [];
+    }
+    const visibleBlogs = [
+      blogs[currentBlogIndex],
+      blogs[(currentBlogIndex + 1) % blogs.length],
+      blogs[(currentBlogIndex + 2) % blogs.length]
     ];
+    console.log('Visible blogs:', visibleBlogs); // Debug log
+    return visibleBlogs;
   };
 
   useEffect(() => {
-    const fetchVideos = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getVideos();
+        setLoading(true);
+        setError(null); // Hata durumunu sıfırla
+        
+        // Test blog yazısı ekle
+        const testBlog = {
+          title: "Diyabet Hakkında Bilmeniz Gerekenler",
+          content: "Diyabet, vücudunuzun şekeri (glukozu) enerjiye dönüştürmek için kullandığı insülin hormonunu üretmediğinde veya etkili bir şekilde kullanamadığında ortaya çıkan kronik bir hastalıktır. Bu durumda kan şekeri (kan glukozu) seviyeleri yükselir. Uzun vadede yüksek kan şekeri seviyeleri, kalp hastalığı, görme kaybı, böbrek hastalığı ve sinir hasarı gibi ciddi sağlık sorunlarına yol açabilir.",
+          image_url: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528",
+          category: "Sağlık"
+        };
+
+        try {
+          await createBlogPost(testBlog);
+          console.log('Test blog post created successfully');
+        } catch (createError) {
+          console.error('Error creating test blog:', createError);
+          // Blog oluşturma hatası olsa bile devam et
+        }
+
+        // Video ve blog verilerini paralel olarak çek
+        const [videoData, blogData] = await Promise.all([
+          getVideos(),
+          getBlogPosts()
+        ]);
+
+        console.log('Fetched blog data:', blogData);
+
+        if (!Array.isArray(blogData)) {
+          throw new Error('Blog data is not in expected format');
+        }
+
         // Sadece video_url'i dolu olanları al
-        setVideos(data.filter(v => v.video_url && v.video_url.trim() !== ""));
+        setVideos(videoData.filter(v => v.video_url && v.video_url.trim() !== ""));
+        setBlogs(blogData);
+
+        console.log('Set blogs state:', blogData);
         setLoading(false);
       } catch (err) {
-        setError(err.message);
+        console.error('Error in fetchData:', err);
+        setError(err.message || 'Veri yüklenirken bir hata oluştu');
         setLoading(false);
+        setBlogs([]); // Hata durumunda blogs state'ini boş array yap
       }
     };
-    fetchVideos();
+    fetchData();
   }, []);
 
   const handlePrevVideo = () => {
@@ -331,64 +357,87 @@ function App() {
                   </p>
                 </div>
 
-                <div className="relative flex items-center justify-center">
-                  <button 
-                    onClick={handlePrevBlog}
-                    className="absolute left-0 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full 
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p className="text-xl text-gray-600">Yükleniyor...</p>
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-8">
+                    <p className="text-xl text-red-600">Hata: {error}</p>
+                  </div>
+                ) : blogs.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-xl text-gray-600">Henüz blog yazısı bulunmamaktadır.</p>
+                  </div>
+                ) : (
+                  <div className="relative flex items-center justify-center">
+                    <button 
+                      onClick={handlePrevBlog}
+                      className="absolute left-0 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full 
                                flex items-center justify-center hover:bg-opacity-90 transition-all"
-                  >
-                    <FontAwesomeIcon icon={faChevronLeft} />
-                  </button>
-                  
-                  <button 
-                    onClick={handleNextBlog}
-                    className="absolute right-0 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full 
+                    >
+                      <FontAwesomeIcon icon={faChevronLeft} />
+                    </button>
+                    
+                    <button 
+                      onClick={handleNextBlog}
+                      className="absolute right-0 z-10 w-12 h-12 bg-[#394C8C] text-white rounded-full 
                                flex items-center justify-center hover:bg-opacity-90 transition-all"
-                  >
-                    <FontAwesomeIcon icon={faChevronRight} />
-                  </button>
+                    >
+                      <FontAwesomeIcon icon={faChevronRight} />
+                    </button>
 
-                  <div className="grid grid-cols-3 gap-8 mx-16 overflow-hidden">
-                    {getVisibleBlogs().map((post, index) => (
-                      <div 
-                        key={post.id} 
-                        className={`bg-white rounded-2xl overflow-hidden shadow-lg 
+                    <div className="grid grid-cols-3 gap-8 mx-16 overflow-hidden">
+                      {getVisibleBlogs().map((post, index) => (
+                        <div 
+                          key={post.id} 
+                          className={`bg-white rounded-2xl overflow-hidden shadow-lg 
                                     transform transition-all duration-300 hover:-translate-y-2 
                                     hover:shadow-xl group
                                     ${index === 1 ? 'scale-105 z-10' : 'scale-90 opacity-70 z-0'}`}
-                      >
-                        <div className="relative overflow-hidden">
-                          <img 
-                            src={post.image} 
-                            alt={post.title} 
-                            className="w-full h-[250px] object-cover 
+                        >
+                          <div className="relative overflow-hidden">
+                            <img 
+                              src={post.image_url || '/default-blog-image.jpg'} 
+                              alt={post.title} 
+                              className="w-full h-[250px] object-cover 
                                        transform transition-transform duration-300 
                                        group-hover:scale-110"
-                          />
-                        </div>
-                        
-                        <div className="p-6">
-                          <h3 className="text-xl font-bold text-[#1E2E62] mb-3 
-                                         group-hover:text-[#394C8C] transition-colors">
-                            {post.title}
-                          </h3>
-                          <p className="text-gray-600 mb-4">{post.excerpt}</p>
-                          
-                          <button 
-                            className="group flex items-center space-x-2 text-[#394C8C] 
-                                       font-semibold hover:text-[#5A70B9] transition-colors"
-                          >
-                            <span>Devamını Oku</span>
-                            <FontAwesomeIcon 
-                              icon={faArrowRight} 
-                              className="transform transition-transform group-hover:translate-x-1"
+                              onError={(e) => {
+                                e.target.src = '/default-blog-image.jpg';
+                              }}
                             />
-                          </button>
+                          </div>
+                          
+                          <div className="p-6">
+                            <h3 className="text-xl font-bold text-[#1E2E62] mb-3 
+                                         group-hover:text-[#394C8C] transition-colors">
+                              {post.title}
+                            </h3>
+                            <p className="text-gray-600 mb-4">
+                              {post.content?.substring(0, 150)}...
+                            </p>
+                            
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openBlogModal(post);
+                              }}
+                              className="group flex items-center space-x-2 text-[#394C8C] 
+                                       font-semibold hover:text-[#5A70B9] transition-colors"
+                            >
+                              <span>Devamını Oku</span>
+                              <FontAwesomeIcon 
+                                icon={faArrowRight} 
+                                className="transform transition-transform group-hover:translate-x-1"
+                              />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex justify-center mt-12">
                   <Link 
@@ -555,6 +604,43 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/appointment-form" element={<AppointmentFormPage />} />
       </Routes>
+
+      {/* Blog Modal */}
+      {selectedBlog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#E6EDFF] rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative p-8 md:p-12 border border-[#A0B4F4]">
+            <button 
+              onClick={closeBlogModal}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-[#394C8C] text-white hover:bg-[#5A70B9] transition-colors"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+            
+            <img 
+              src={selectedBlog.image_url || '/default-blog-image.jpg'} 
+              alt={selectedBlog.title} 
+              className="w-full h-96 object-cover rounded-2xl mb-8"
+              onError={(e) => {
+                e.target.src = '/default-blog-image.jpg';
+              }}
+            />
+            
+            <h2 className="text-4xl font-bold text-[#1E2E62] mb-6">{selectedBlog.title}</h2>
+            
+            {selectedBlog.category && (
+              <div className="mb-6">
+                <span className="inline-block bg-[#394C8C] text-white px-4 py-2 rounded-full">
+                  {selectedBlog.category}
+                </span>
+              </div>
+            )}
+            
+            <div className="prose max-w-none text-[#394C8C] leading-relaxed">
+              {selectedBlog.content}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
