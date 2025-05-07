@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faUser, faPhone, faCalendarAlt, 
   faNotesMedical, faFileUpload, faClock 
 } from '@fortawesome/free-solid-svg-icons';
+import { uploadMedicalFile } from '../services/uploadMedicalFile';
+import { supabase } from '../supabase';
+import { useNavigate } from 'react-router-dom';
+import { getUnavailableTimes } from '../services/unavailableService';
 
 function AppointmentFormPage() {
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [selectedTime, setSelectedTime] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [userEmail, setUserEmail] = useState(null);
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
@@ -18,20 +24,72 @@ function AppointmentFormPage() {
     medicalFile: null
   });
 
+  const navigate = useNavigate();
+
+  // Kullanıcı email'ini al
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email);
+      }
+    };
+    getUser();
+  }, []);
+
   // Örnek dinamik saat listesi (gerçek senaryoda admin panelden gelecek)
   const availableTimes = [
-    '09:00', '10:00', '11:00', '13:00', 
-    '14:00', '15:00', '16:00', '17:00'
+    '09:00:00', '10:00:00', '11:00:00', '13:00:00', 
+    '14:00:00', '15:00:00', '16:00:00', '17:00:00'
   ];
 
+  const [unavailableTimes, setUnavailableTimes] = useState([]);
+
+  useEffect(() => {
+    if (formData.selectedDate) {
+      getUnavailableTimes(formData.selectedDate).then(times => {
+        setUnavailableTimes(times);
+        console.log('Seçili gün:', formData.selectedDate);
+        console.log('Müsait olmayan saatler:', times);
+      });
+    } else {
+      setUnavailableTimes([]);
+    }
+  }, [formData.selectedDate]);
+
+  const now = new Date();
+  const isToday = formData.selectedDate === now.toISOString().slice(0, 10);
+
+  const selectableTimes = availableTimes.filter(time => {
+    if (unavailableTimes.includes(time)) return false;
+    if (isToday) {
+      // Saatin geçmiş olup olmadığını kontrol et
+      const [hour, minute, second] = time.split(":").map(Number);
+      if (hour < now.getHours()) return false;
+      if (hour === now.getHours() && minute <= now.getMinutes()) return false;
+    }
+    return true;
+  });
+
   // Günleri ve ayları oluştur
-  const days = Array.from({length: 31}, (_, i) => i + 1);
+  const getDaysInMonth = (month, year) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const days = Array.from(
+    {length: getDaysInMonth(selectedMonth, new Date().getFullYear())}, 
+    (_, i) => i + 1
+  );
   const months = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 
     'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 
     'Eylül', 'Ekim', 'Kasım', 'Aralık'
   ];
   const currentYear = new Date().getFullYear();
+
+  const handleMonthSelect = (month) => {
+    setSelectedMonth(months.indexOf(month));
+  };
 
   const handleDateSelect = (day, month) => {
     const monthIndex = months.indexOf(month) + 1;
@@ -50,18 +108,62 @@ function AppointmentFormPage() {
   };
 
   const handleTimeSelect = (time) => {
-    setSelectedTime(time);
+    let formatted = time;
+    if (!time.includes(':')) {
+      formatted = time.padStart(2, '0') + ':00:00';
+    } else if (time.length === 5) {
+      formatted = time + ':00';
+    }
+    setSelectedTime(formatted);
     setIsTimeModalOpen(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const submissionData = {
-      ...formData,
-      selectedTime
-    };
-    console.log('Randevu Bilgileri:', submissionData);
-    alert('Randevu talebiniz alınmıştır.');
+    const selectedDateObj = new Date(formData.selectedDate);
+    if (selectedDateObj.getDay() === 0 || selectedDateObj.getDay() === 6) {
+      alert('Hafta sonu randevu alınamaz!');
+      return;
+    }
+    // Geçmiş tarih/saat kontrolü
+    const selectedDateTime = new Date(`${formData.selectedDate}T${selectedTime}`);
+    if (selectedDateTime < new Date()) {
+      alert('Geçmiş bir tarih/saat için randevu alınamaz!');
+      return;
+    }
+    let fileUrl = null;
+    if (formData.medicalFile) {
+      try {
+        fileUrl = await uploadMedicalFile(formData.medicalFile);
+      } catch (err) {
+        alert('Dosya yüklenirken hata oluştu!');
+        return;
+      }
+    }
+
+    let timeToSave = selectedTime;
+    if (timeToSave && timeToSave.length === 5) {
+      timeToSave = timeToSave + ':00';
+    }
+
+    const { error } = await supabase
+      .from('appointments')
+      .insert([{
+        full_name: formData.fullName,
+        phone_number: formData.phoneNumber,
+        date: formData.selectedDate,
+        time: timeToSave,
+        complaint: formData.complaint,
+        medical_file_url: fileUrl,
+        email: userEmail
+      }]);
+
+    if (error) {
+      alert('Kayıt sırasında hata oluştu!');
+    } else {
+      alert('Randevu talebiniz başarıyla alındı!');
+      navigate('/');
+    }
   };
 
   return (
@@ -180,7 +282,7 @@ function AppointmentFormPage() {
                            transition duration-300 ease-in-out text-left
                            hover:shadow-sm"
               >
-                {selectedTime ? `Seçilen Saat: ${selectedTime}` : 'Saat Seç'}
+                {selectedTime ? `Seçilen Saat: ${selectedTime.slice(0,2)}:00` : 'Saat Seç'}
               </button>
             </div>
           </div>
@@ -257,23 +359,40 @@ function AppointmentFormPage() {
             <h3 className="text-2xl font-bold text-[#394C8C] mb-4">Tarih Seçin</h3>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {months.map((month) => (
-                <div key={month} className="text-center font-semibold text-[#394C8C] opacity-70">
+                <button
+                  key={month}
+                  onClick={() => handleMonthSelect(month)}
+                  className={`text-center font-semibold py-2 px-4 rounded-lg transition-all duration-300
+                    ${selectedMonth === months.indexOf(month)
+                      ? 'bg-[#394C8C] text-white'
+                      : 'text-[#394C8C] opacity-70 hover:bg-[#394C8C]/10'
+                    }`}
+                >
                   {month}
-                </div>
+                </button>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-2">
-              {days.map((day) => (
-                <button
-                  key={day}
-                  onClick={() => handleDateSelect(day, months[new Date().getMonth()])}
-                  className="py-2 px-4 rounded-lg transition-all duration-300 
-                    hover:bg-[#5A70B9] hover:text-white 
-                    focus:outline-none focus:ring-2 focus:ring-[#394C8C]"
-                >
-                  {day}
-                </button>
-              ))}
+              {days.map((day) => {
+                const dateObj = new Date(currentYear, selectedMonth, day);
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                const isPastDate = dateObj < new Date(new Date().setHours(0,0,0,0));
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => !isWeekend && !isPastDate && handleDateSelect(day, months[selectedMonth])}
+                    className={`py-2 px-4 rounded-lg transition-all duration-300 
+                      ${isWeekend || isPastDate
+                        ? 'bg-gray-300 text-gray-400 cursor-not-allowed'
+                        : 'hover:bg-[#5A70B9] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#394C8C]'
+                      }`}
+                    disabled={isWeekend || isPastDate}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={() => setIsDateModalOpen(false)}
@@ -291,7 +410,7 @@ function AppointmentFormPage() {
           <div className="bg-white p-8 rounded-2xl max-w-md w-full">
             <h3 className="text-2xl font-bold text-[#394C8C] mb-4">Saat Seçin</h3>
             <div className="grid grid-cols-4 gap-4">
-              {availableTimes.map((time) => (
+              {selectableTimes.map((time) => (
                 <button
                   key={time}
                   onClick={() => handleTimeSelect(time)}
@@ -300,9 +419,12 @@ function AppointmentFormPage() {
                       ? 'bg-[#394C8C] text-white' 
                       : 'bg-gray-200 hover:bg-[#5A70B9] hover:text-white'}`}
                 >
-                  {time}
+                  {time.slice(0,2)}:00
                 </button>
               ))}
+              {selectableTimes.length === 0 && (
+                <div className="col-span-4 text-center text-gray-500">Bu gün için uygun saat yok.</div>
+              )}
             </div>
             <button
               onClick={() => setIsTimeModalOpen(false)}

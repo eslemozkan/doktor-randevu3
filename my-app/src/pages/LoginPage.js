@@ -25,8 +25,8 @@ const LoginPage = () => {
       }
 
       if (user) {
-        // Başarılı giriş sonrası ana sayfaya yönlendir
-        navigate('/');
+        // Başarılı giriş sonrası randevu formuna yönlendir
+        navigate('/appointment-form');
       }
     } catch (err) {
       setError('Giriş yapılırken bir hata oluştu.');
