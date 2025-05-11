@@ -3,12 +3,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import { loginUser } from '../services/authService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faLock } from '@fortawesome/free-solid-svg-icons';
+import { supabase } from '../supabase';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -32,6 +34,21 @@ const LoginPage = () => {
       setError('Giriş yapılırken bir hata oluştu.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Şifremi unuttum fonksiyonu
+  const handleForgotPassword = async () => {
+    const resetEmail = window.prompt('Şifre sıfırlama bağlantısı için email adresinizi girin:');
+    if (!resetEmail) return;
+    setResetMessage('');
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    if (error) {
+      setResetMessage('Bir hata oluştu: ' + error.message);
+    } else {
+      setResetMessage('Şifre sıfırlama bağlantısı email adresinize gönderildi.');
     }
   };
 
@@ -88,6 +105,15 @@ const LoginPage = () => {
                 placeholder="••••••••"
               />
             </div>
+            {/* Şifremi Unuttum linki */}
+            <div className="flex justify-end mt-1">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-[#394C8C] hover:underline"
+              >
+                Şifremi Unuttum
+              </Link>
+            </div>
           </div>
 
           <button
@@ -115,3 +141,4 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+

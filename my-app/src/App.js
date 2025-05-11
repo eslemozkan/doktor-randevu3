@@ -13,6 +13,8 @@ import AllBlogPage from './pages/AllBlogPage';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import AppointmentFormPage from './pages/AppointmentFormPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import { getVideos } from './services/videoService';
 import { getBlogPosts, createBlogPost } from './services/blogService';
 import { extractYouTubeId } from './utils/videoUtils';
@@ -603,6 +605,8 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/appointment-form" element={<AppointmentFormPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Routes>
 
       {/* Blog Modal */}
